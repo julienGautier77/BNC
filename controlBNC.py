@@ -30,7 +30,8 @@ from PyQt6.QtCore import Qt
 import pathlib
 
 class BNCBOX(QWidget):
-    def __init__(self,parent=None):
+     
+    def __init__(self,com='com3',parent=None):
         
         super(BNCBOX, self).__init__(parent)
         self.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt6'))
@@ -38,13 +39,13 @@ class BNCBOX(QWidget):
         p = pathlib.Path(__file__)
         self.icon=str(p.parent) + sepa+'icons'+sepa
         self.setWindowIcon(QIcon(self.icon+'LOA.png'))
-        
+        self.com=com
         self.confBNC=QtCore.QSettings("confBNC.ini", QtCore.QSettings.Format.IniFormat)
         #self.ser=serial.Serial("/dev/ttyUSB0")
         rm=pyvisa.ResourceManager()
         
         # Ouverture du BNC
-        self.bnc=rm.open_resource("COM3")
+        self.bnc=rm.open_resource(self.com)
         self.bnc.term_chars='\r\n'
         self.bnc.read_termination='\r\n'
         self.bnc.send_end=True
@@ -56,6 +57,8 @@ class BNCBOX(QWidget):
         self.setWindowTitle('Berkley Nucleonics Corporation' + ' s/n: ' + str(numSerie) )
         self.bnc.write(":PULSE0:STAT OFF") # not running at starting
         self.isrunnig=False
+        self.onehzIsRunning=False
+        self.threadOneHz=THREADONEHZ(parent=self)
         self.setup()
         self.actionButton()
         self.iniValue()
@@ -95,7 +98,9 @@ class BNCBOX(QWidget):
         self.softTriggButton=QToolButton()
         self.softTriggButton.setText('Soft Trig')
         hbox.addWidget(self.softTriggButton)
-
+        self.OneHzTriggButton=QToolButton()
+        self.OneHzTriggButton.setText('1hz')
+        hbox.addWidget(self.OneHzTriggButton)
         self.setLayout(vbox)
     
     def actionButton(self):
@@ -104,6 +109,9 @@ class BNCBOX(QWidget):
          self.mode.currentIndexChanged.connect(self.MODE)
          self.startButton.clicked.connect(self.RUN)
          self.softTriggButton.clicked.connect(self.SOFT)
+         self.OneHzTriggButton.clicked.connect(self.ONEHZ)
+                                               
+
 
     def TRIG(self):
 
@@ -148,11 +156,26 @@ class BNCBOX(QWidget):
             self.isrunnig=True
         else :
             self.bnc.write(":PULSE0:STAT OFF") 
-            self.startButton.setStyleSheet("background-color: gray")
+            self.startButton.setStyleSheet("background-color: transparent")
             self.startButton.setText("Run")
             self.isrunnig=False
             self.anim.stop()
 
+    def ONEHZ(self):
+        print(self.onehzIsRunning)
+        if self.onehzIsRunning==False:
+            if self.isrunnig==False:
+                self.RUN() 
+                self.threadOneHz.start()
+                
+            if self.isrunnig==True:
+                self.threadOneHz.start()
+            self.onehzIsRunning=True
+            self.OneHzTriggButton.setStyleSheet("background-color: gray")
+        else:
+            self.OneHzTriggButton.setStyleSheet("background-color: transparent")
+            self.threadOneHz.stopThreadOneHz()
+            self.onehzIsRunning=False
     def SOFT(self):
             
             self.bnc.write('*TRG')
@@ -166,14 +189,14 @@ class BNCBOX(QWidget):
         if self.confBNC.value("T0/trig")=='DIS':
             self.trig.setCurrentIndex(2)
         self.TRIG()
-
+        
         if self.confBNC.value("T0/mode")=='NORM':
             self.mode.setCurrentIndex(0)
-        if self.confBNC.value("T0/trig")=='DCYC':
+        if self.confBNC.value("T0/mode")=='DCYC':
             self.mode.setCurrentIndex(1)
-        if self.confBNC.value("T0/trig")=='BURS':
+        if self.confBNC.value("T0/mode")=='BURS':
             self.mode.setCurrentIndex(2)
-        if self.confBNC.value("T0/trig")=='SING':
+        if self.confBNC.value("T0/mode")=='SING':
             self.mode.setCurrentIndex(3)
         self.MODE()
 
@@ -185,7 +208,7 @@ class BNCBOX(QWidget):
 
     
 class WIDGETBNC(QWidget):
-    
+    #widget for 1 channel mode sate delay witdth
     def __init__(self,channel='PULSE1',conf=None,color='white',parent=None):
         
         super(WIDGETBNC, self).__init__(parent)
@@ -322,29 +345,54 @@ class WIDGETBNC(QWidget):
         time.sleep(0.1)
         
         d=self.confBNC.value(self.channel+'/delay')
-        self.boxDelay.setValue(float(d))
-        mess=':'+str(self.channel)+':DELAY '+str(d)
+        self.boxDelay.setValue(round(float(d),9))
+        mess=':'+str(self.channel)+':DELAY '+str(round(float(d),9))
+        print(mess)
         self.bnc.write(mess)
         time.sleep(0.1)
+
         w=self.confBNC.value(self.channel+'/width')
-        self.boxWidth.setValue(float(w))
-        mess=':'+str(self.channel)+':WIDTH '+str(w)
+        self.boxWidth.setValue(round(float(w),9))
+        mess=':'+str(self.channel)+':WIDTH '+str(round(float(w),9))
         self.bnc.write(mess)
         time.sleep(0.1)
+
         if self.confBNC.value(self.channel+"/state")=='ON':
             self.state.setCurrentIndex(0)
         if self.confBNC.value(self.channel+"/state")=='OFF':
             self.state.setCurrentIndex(1)
         self.STATE()
         time.sleep(0.01)
-        self.bnc.write(":DISP:UPDATE")
+        self.bnc.query(":DISP:UPDATE")
         
-
+class THREADONEHZ(QtCore.QThread):
+    '''Second thread for controling one HZ
+    '''
+    def __init__(self, parent):
+        super(THREADONEHZ,self).__init__()
+        self.parent=parent
+        self.bnc = self.parent.bnc
+        self.stopRun=False
+    
+   
+    
+    
+    def run(self):
+        i=0
+        while True:
+            if self.stopRun==True:
+                break
+            self.bnc.write('*TRG')
+            i=i+1
+            print('trig',i)
+            time.sleep(1)
+       
+    def stopThreadOneHz(self):
+        
+        self.stopRun=True
 
 if __name__ =='__main__':
     appli=QApplication(sys.argv)
     tt=BNCBOX()
-    #tt=WIDGETBNC()
-    #tt.startThread2()
     tt.show()
     appli.exec()
