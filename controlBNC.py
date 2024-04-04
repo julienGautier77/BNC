@@ -56,6 +56,9 @@ class BNCBOX(QWidget):
         print('connected) @',numSerie)
         self.setWindowTitle('Berkley Nucleonics Corporation' + ' s/n: ' + str(numSerie) )
         self.bnc.write(":PULSE0:STAT OFF") # not running at starting
+        self.bnc.write(":PULS:EXT:LEV 2.1")
+        self.bnc.write(":PULS:EXT:EDGERIS")
+        self.bnc.write(":PULS:EXT:POL:HIGH")
         self.isrunnig=False
         self.onehzIsRunning=False
         self.threadOneHz=THREADONEHZ(parent=self)
@@ -101,6 +104,10 @@ class BNCBOX(QWidget):
         self.OneHzTriggButton=QToolButton()
         self.OneHzTriggButton.setText('1hz')
         hbox.addWidget(self.OneHzTriggButton)
+        delayLabel=QLabel('Delay 1hz')
+        hbox.addWidget(delayLabel)
+        self.hzDelay=QDoubleSpinBox()
+        hbox.addWidget(self.hzDelay)
         self.setLayout(vbox)
     
     def actionButton(self):
@@ -110,6 +117,7 @@ class BNCBOX(QWidget):
          self.startButton.clicked.connect(self.RUN)
          self.softTriggButton.clicked.connect(self.SOFT)
          self.OneHzTriggButton.clicked.connect(self.ONEHZ)
+         self.hzDelay.editingFinished.connect(self.DELAYHZ)
                                                
 
 
@@ -162,23 +170,54 @@ class BNCBOX(QWidget):
             self.anim.stop()
 
     def ONEHZ(self):
-        print(self.onehzIsRunning)
+        # print(self.onehzIsRunning)
         if self.onehzIsRunning==False:
             if self.isrunnig==False:
                 self.RUN() 
-                self.threadOneHz.start()
-                
-            if self.isrunnig==True:
-                self.threadOneHz.start()
             self.onehzIsRunning=True
-            self.OneHzTriggButton.setStyleSheet("background-color: gray")
+            self.OneHzTriggButton.setStyleSheet("background-color: red")
+            
+            self.widCh1.state.setCurrentIndex(1)
+            # mess=':PULSE1:STATE OFF '
+            # self.bnc.write(mess)
+            self.widCh2.state.setCurrentIndex(1)
+            # mess=':PULSE2:STATE OFF '
+            # self.bnc.write(mess)
+
+            d = self.delayHz #♦0.940-(0/1000)
+            v3=self.widCh3.boxDelay.value()
+            v4=self.widCh4.boxDelay.value()
+            self.widCh3.boxDelay.setValue(v3+d)
+            self.widCh4.boxDelay.setValue(v4+d)
+            mess=':PULSE3:DELAY '+str(round(float(v3+d),9))
+            self.bnc.write(mess)
+            mess=':PULSE4:DELAY '+str(round(float(v4+d),9))
+            self.bnc.write(mess)
+            self.bnc.query(":DISP:UPDATE")
         else:
             self.OneHzTriggButton.setStyleSheet("background-color: transparent")
-            self.threadOneHz.stopThreadOneHz()
+            self.widCh1.valueIni()
+            time.sleep(0.1)
+            self.widCh2.valueIni()
+            time.sleep(0.1)
+            self.widCh3.valueIni()
+            time.sleep(0.1)
+            self.widCh4.valueIni()
+            time.sleep(0.1)
+            self.RUN()
             self.onehzIsRunning=False
+
+
     def SOFT(self):
-            
-            self.bnc.write('*TRG')
+            if self.isrunnig==False:
+                self.RUN() 
+                time.sleep(0.1)
+                self.bnc.write('*TRG')
+                time.sleep(0.1)
+                self.isrunnig = True
+                self.RUN()
+            else : 
+                self.bnc.write('*TRG')
         
     def iniValue(self):
         
@@ -199,13 +238,18 @@ class BNCBOX(QWidget):
         if self.confBNC.value("T0/mode")=='SING':
             self.mode.setCurrentIndex(3)
         self.MODE()
+        self.bnc.query(":DISP:UPDATE")
+        self.hzDelay.setValue(float(self.confBNC.value("T0/delayHz")))
+        self.delayHz=self.hzDelay.value()
 
-        
+    def DELAYHZ(self):
+        self.delayHz=self.hzDelay.value()
+        self.confBNC.setValue("T0/delayHz",self.delayHz)
 
-
-        
-        
-
+    def closeEvent(self,event):
+        ''' closing window event (cross button) '''
+        self.bnc.write(":PULSE0:STAT OFF") # not running 
+        time.sleep(0.1)  
     
 class WIDGETBNC(QWidget):
     #widget for 1 channel mode sate delay witdth
@@ -283,56 +327,70 @@ class WIDGETBNC(QWidget):
 
 
     def STATE(self):
+
         if self.state.currentIndex()==0:
+            
             mess=':'+str(self.channel)+':STATE ON '
-            self.confBNC.setValue(self.channel+'/state','ON')
+            if self.parent.onehzIsRunning==False :
+                self.confBNC.setValue(self.channel+'/state','ON')
             self.bnc.write(mess)
+            # print(self.channel,mess)
         else :
             mess=':'+str(self.channel)+':STATE OFF '
-            self.confBNC.setValue(self.channel+'/state','OFF')
+            if self.parent.onehzIsRunning==False :
+                self.confBNC.setValue(self.channel+'/state','OFF')
             self.bnc.write(mess)
+        self.bnc.query(":DISP:UPDATE")
     
     def DELAY(self):
         val=self.boxDelay.value()
         mess=':'+str(self.channel)+':DELAY '+str(val)
         self.bnc.write(mess)
-        self.confBNC.setValue(self.channel+'/delay',val)
+        if self.parent.onehzIsRunning==False :
+            self.confBNC.setValue(self.channel+'/delay',val)
+        self.bnc.query(":DISP:UPDATE")
 
     def WIDTH(self):
         val=self.boxWidth.value()
         mess=':'+str(self.channel)+':WIDT '+str(val)
         self.bnc.write(mess)
-        self.confBNC.setValue(self.channel+'/width',val)
+        if self.parent.onehzIsRunning==False :
+            self.confBNC.setValue(self.channel+'/width',val)
+        self.bnc.query(":DISP:UPDATE")
 
     def MODE(self):
         if self.mode.currentIndex()==0:
             mess=':' +str(self.channel)+':CMOD NORMal'
             self.bnc.write(mess)
-            self.confBNC.setValue(self.channel+'/mode','NORMal')
+            if self.parent.onehzIsRunning==False :
+                self.confBNC.setValue(self.channel+'/mode','NORMal')
         if self.mode.currentIndex()==1:
             mess=':' +str(self.channel)+':CMOD DCYClE'
-            self.confBNC.setValue(self.channel+'/mode','DCYClE')
+            if self.parent.onehzIsRunning==False :
+                self.confBNC.setValue(self.channel+'/mode','DCYClE')
             self.bnc.write(mess)
         if self.mode.currentIndex()==2:
             mess=':' +str(self.channel)+':CMOD BURS'
             self.bnc.write(mess)
-            self.confBNC.setValue(self.channel+'/mode','BURST')
+            if self.parent.onehzIsRunning==False :
+                self.confBNC.setValue(self.channel+'/mode','BURST')
         if self.mode.currentIndex()==3:
             mess=':' +str(self.channel)+':CMOD SING'
             self.bnc.write(mess)
-            self.confBNC.setValue(self.channel+'/mode','SINGle')
-
+            if self.parent.onehzIsRunning==False :
+                self.confBNC.setValue(self.channel+'/mode','SINGle')
+        self.bnc.query(":DISP:UPDATE")
 
     def valueIni(self):
         # write initial value on the widget and send to the controler
         self.bnc.write(":"+self.channel+":SYNC T0")
-        time.sleep(0.1)
+        time.sleep(0.01)
         self.bnc.write(":"+self.channel+":OUTPut:AMPL 5.0")
-        time.sleep(0.1)
+        time.sleep(0.01)
         self.bnc.write(":"+"self.channel"+":EDGe RISing")
-        time.sleep(0.1)
+        time.sleep(0.01)
         self.bnc.write(":"+"self.channel"+":POLarity NORMal")
-        time.sleep(0.1)
+        time.sleep(0.01)
         if self.confBNC.value(self.channel+'/mode')=='NORMal':
             self.mode.setCurrentIndex(0)
         if self.confBNC.value(self.channel+'/mode')=='DCYClE':
@@ -342,27 +400,27 @@ class WIDGETBNC(QWidget):
         if self.confBNC.value(self.channel+'/mode')=='SINGle':
             self.mode.setCurrentIndex(3)
         self.MODE()
-        time.sleep(0.1)
+        time.sleep(0.01)
         
         d=self.confBNC.value(self.channel+'/delay')
         self.boxDelay.setValue(round(float(d),9))
         mess=':'+str(self.channel)+':DELAY '+str(round(float(d),9))
-        print(mess)
+        
         self.bnc.write(mess)
-        time.sleep(0.1)
+        time.sleep(0.05)
 
         w=self.confBNC.value(self.channel+'/width')
         self.boxWidth.setValue(round(float(w),9))
         mess=':'+str(self.channel)+':WIDTH '+str(round(float(w),9))
         self.bnc.write(mess)
-        time.sleep(0.1)
+        time.sleep(0.05)
 
         if self.confBNC.value(self.channel+"/state")=='ON':
             self.state.setCurrentIndex(0)
         if self.confBNC.value(self.channel+"/state")=='OFF':
             self.state.setCurrentIndex(1)
         self.STATE()
-        time.sleep(0.01)
+        time.sleep(0.05)
         self.bnc.query(":DISP:UPDATE")
         
 class THREADONEHZ(QtCore.QThread):
@@ -384,7 +442,7 @@ class THREADONEHZ(QtCore.QThread):
                 break
             self.bnc.write('*TRG')
             i=i+1
-            print('trig',i)
+            
             time.sleep(1)
        
     def stopThreadOneHz(self):
