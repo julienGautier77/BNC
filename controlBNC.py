@@ -28,6 +28,7 @@ import pyvisa
 from PyQt6.QtGui import QColor,QIcon
 from PyQt6.QtCore import Qt
 import pathlib
+import relayModule
 
 class BNCBOX(QWidget):
      
@@ -61,7 +62,11 @@ class BNCBOX(QWidget):
         self.bnc.write(":PULS:EXT:POL:HIGH")
         self.isrunnig=False
         self.onehzIsRunning=False
-        self.threadOneHz=THREADONEHZ(parent=self)
+        # relay connexion to switch 1KHz to trig Shot 
+        self.relay=relayModule.RELAY()
+        self.relay.connect()
+        time.sleep(0.1)
+        self.relay.setDO1Inactive()
         self.setup()
         self.actionButton()
         self.iniValue()
@@ -194,8 +199,11 @@ class BNCBOX(QWidget):
             mess=':PULSE4:DELAY '+str(round(float(v4+d),9))
             self.bnc.write(mess)
             self.bnc.query(":DISP:UPDATE")
+            self.relay.setDO1Active()
         else:
             self.OneHzTriggButton.setStyleSheet("background-color: transparent")
+            self.relay.setDO1Inactive()
+            time.sleep(0.1)
             self.widCh1.valueIni()
             time.sleep(0.1)
             self.widCh2.valueIni()
@@ -206,7 +214,6 @@ class BNCBOX(QWidget):
             time.sleep(0.1)
             self.RUN()
             self.onehzIsRunning=False
-
 
     def SOFT(self):
             if self.isrunnig==False:
@@ -250,6 +257,7 @@ class BNCBOX(QWidget):
         ''' closing window event (cross button) '''
         self.bnc.write(":PULSE0:STAT OFF") # not running 
         time.sleep(0.1)  
+        self.relay.close()
     
 class WIDGETBNC(QWidget):
     #widget for 1 channel mode sate delay witdth
@@ -423,31 +431,7 @@ class WIDGETBNC(QWidget):
         time.sleep(0.05)
         self.bnc.query(":DISP:UPDATE")
         
-class THREADONEHZ(QtCore.QThread):
-    '''Second thread for controling one HZ
-    '''
-    def __init__(self, parent):
-        super(THREADONEHZ,self).__init__()
-        self.parent=parent
-        self.bnc = self.parent.bnc
-        self.stopRun=False
-    
-   
-    
-    
-    def run(self):
-        i=0
-        while True:
-            if self.stopRun==True:
-                break
-            self.bnc.write('*TRG')
-            i=i+1
-            
-            time.sleep(1)
-       
-    def stopThreadOneHz(self):
-        
-        self.stopRun=True
+
 
 if __name__ =='__main__':
     appli=QApplication(sys.argv)
