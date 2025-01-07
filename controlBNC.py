@@ -19,7 +19,7 @@ Widget to control BNC pulse Generator
 from PyQt6 import QtCore
 import qdarkstyle
 
-from PyQt6.QtWidgets import QApplication,QLabel,QComboBox,QToolButton,QAbstractSpinBox
+from PyQt6.QtWidgets import QApplication,QLabel,QComboBox,QToolButton,QAbstractSpinBox,QLineEdit
 from PyQt6.QtWidgets import QWidget,QVBoxLayout,QPushButton,QHBoxLayout,QDoubleSpinBox,QFrame
 import qdarkstyle
 import time
@@ -54,8 +54,8 @@ class BNCBOX(QWidget):
         
         self.bnc.query("*IDN?")
         numSerie=self.bnc.read()
-        print('connected) @',numSerie)
-        self.setWindowTitle('Berkley Nucleonics Corporation' + ' s/n: ' + str(numSerie) )
+        print('connected @ BNc s/n : ',numSerie)
+        self.setWindowTitle('ROSA : Berkley Nucleonics Corporation' + ' s/n: ' + str(numSerie) )
         self.bnc.write(":PULSE0:STAT OFF") # not running at starting
         self.bnc.write(":PULS:EXT:LEV 2.1")
         self.bnc.write(":PULS:EXT:EDGERIS")
@@ -183,11 +183,8 @@ class BNCBOX(QWidget):
             self.OneHzTriggButton.setStyleSheet("background-color: red")
             
             self.widCh1.state.setCurrentIndex(1)
-            # mess=':PULSE1:STATE OFF '
-            # self.bnc.write(mess)
+            
             self.widCh2.state.setCurrentIndex(1)
-            # mess=':PULSE2:STATE OFF '
-            # self.bnc.write(mess)
 
             d = self.delayHz #♦0.940-(0/1000)
             v3=self.widCh3.boxDelay.value()
@@ -199,7 +196,7 @@ class BNCBOX(QWidget):
             mess=':PULSE4:DELAY '+str(round(float(v4+d),9))
             self.bnc.write(mess)
             self.bnc.query(":DISP:UPDATE")
-            self.relay.setDO1Active()
+            self.relay.setDO1Active()  # relay on 1hz
         else:
             self.OneHzTriggButton.setStyleSheet("background-color: transparent")
             self.relay.setDO1Inactive()
@@ -281,10 +278,11 @@ class WIDGETBNC(QWidget):
         hbox=QHBoxLayout()
         hbox1=QHBoxLayout()
 
-        self.name=QLabel(self.channel)
-        self.name.setStyleSheet('font: bold 18px')
+        self.name=QLineEdit(self.channel)
+        
         #self.name.setStyleSheet('border-width: 2px;border-style: solid;border-color: white')
         self.name.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self.name.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         hbox.addWidget(self.name)
         self.state=QComboBox(self)
         self.state.addItem('Enable')
@@ -298,15 +296,17 @@ class WIDGETBNC(QWidget):
         hbox.addWidget(self.mode)
         vbox1.addLayout(hbox)
 
-        lab1=QLabel('Delay')
+        lab1=QLabel('Delay (s)')
+        lab1.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.boxDelay=QDoubleSpinBox()
         self.boxDelay.setDecimals(9)
         self.boxDelay.setMaximum(1)
         self.boxDelay.setStepType(QAbstractSpinBox.StepType.AdaptiveDecimalStepType)
         hbox1.addWidget(lab1)
         hbox1.addWidget(self.boxDelay)
-
-        lab2=QLabel('Width')
+        hbox1.addSpacing(100)
+        lab2=QLabel('Width (s)')
+        lab2.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.boxWidth=QDoubleSpinBox()
         self.boxWidth.setDecimals(9)
         self.boxWidth.setMaximum(1)
@@ -315,10 +315,7 @@ class WIDGETBNC(QWidget):
         hbox1.addWidget(self.boxWidth)
 
         vbox1.addLayout(hbox1)
-       
-        
         widget=QWidget()
-        
         widget.setLayout(vbox1)
         widget.setObjectName("colorWidget")
         #border-width: 2px;border-style: solid;border-color: white
@@ -332,7 +329,11 @@ class WIDGETBNC(QWidget):
          self.mode.currentIndexChanged.connect(self.MODE)
          self.boxDelay.editingFinished.connect(self.DELAY)
          self.boxWidth.editingFinished.connect(self.WIDTH)
+         self.name.editingFinished.connect(self.nameChanged)
 
+    def nameChanged(self):
+        self.confBNC.setValue(self.channel+ '/name',self.name.text())
+        self.confBNC.sync()
 
     def STATE(self):
 
@@ -342,12 +343,16 @@ class WIDGETBNC(QWidget):
             if self.parent.onehzIsRunning==False :
                 self.confBNC.setValue(self.channel+'/state','ON')
             self.bnc.write(mess)
+            time.sleep(0.1)
+            self.name.setStyleSheet("font: bold 25px ;background-color: red" )
             # print(self.channel,mess)
         else :
             mess=':'+str(self.channel)+':STATE OFF '
             if self.parent.onehzIsRunning==False :
                 self.confBNC.setValue(self.channel+'/state','OFF')
             self.bnc.write(mess)
+            time.sleep(0.1)
+            self.name.setStyleSheet("font: bold 25px ;background-color: gray" )
         self.bnc.query(":DISP:UPDATE")
     
     def DELAY(self):
@@ -390,6 +395,9 @@ class WIDGETBNC(QWidget):
         self.bnc.query(":DISP:UPDATE")
 
     def valueIni(self):
+        self.name.setText(str(self.confBNC.value(self.channel+'/name')))
+        
+        self.name.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         # write initial value on the widget and send to the controler
         self.bnc.write(":"+self.channel+":SYNC T0")
         time.sleep(0.01)

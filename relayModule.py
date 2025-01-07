@@ -36,7 +36,7 @@ class RELAY():
         """
         try:
             self.socket.connect((self.ip, self.port))
-            print('Connected to relay @',self.ip,'on port : ', self.port)
+            print('Connected to relay @ ',self.ip,'on port : ', self.port)
         except:
             raise
         if self.checkModuleID() != True:
@@ -231,7 +231,7 @@ class RELAY():
             state (int): The state to set, 0 for inactive, otherwise active.
         """
         if state == 0:
-           self. digitalInactive(port, pulse)
+           self.digitalInactive(port, pulse)
         else:
             self.digitalActive(port, pulse)
 
