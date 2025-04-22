@@ -195,7 +195,7 @@ class BNCBOX(QWidget):
             self.bnc.write(mess)
             mess=':PULSE4:DELAY '+str(round(float(v4+d),9))
             self.bnc.write(mess)
-            self.bnc.query(":DISP:UPDATE")
+            #self.bnc.query(":DISP:UPDATE")
             self.relay.setDO1Active()  # relay on 1hz
         else:
             self.OneHzTriggButton.setStyleSheet("background-color: transparent")
@@ -242,7 +242,7 @@ class BNCBOX(QWidget):
         if self.confBNC.value("T0/mode")=='SING':
             self.mode.setCurrentIndex(3)
         self.MODE()
-        self.bnc.query(":DISP:UPDATE")
+        #self.bnc.query(":DISP:UPDATE")
         self.hzDelay.setValue(float(self.confBNC.value("T0/delayHz")))
         self.delayHz=self.hzDelay.value()
 
@@ -353,7 +353,7 @@ class WIDGETBNC(QWidget):
             self.bnc.write(mess)
             time.sleep(0.1)
             self.name.setStyleSheet("font: bold 25px ;background-color: gray" )
-        self.bnc.query(":DISP:UPDATE")
+        #self.bnc.query(":DISP:UPDATE")
     
     def DELAY(self):
         val=self.boxDelay.value()
@@ -361,7 +361,7 @@ class WIDGETBNC(QWidget):
         self.bnc.write(mess)
         if self.parent.onehzIsRunning==False :
             self.confBNC.setValue(self.channel+'/delay',val)
-        self.bnc.query(":DISP:UPDATE")
+        #self.bnc.query(":DISP:UPDATE")
 
     def WIDTH(self):
         val=self.boxWidth.value()
@@ -369,7 +369,7 @@ class WIDGETBNC(QWidget):
         self.bnc.write(mess)
         if self.parent.onehzIsRunning==False :
             self.confBNC.setValue(self.channel+'/width',val)
-        self.bnc.query(":DISP:UPDATE")
+        #self.bnc.query(":DISP:UPDATE")
 
     def MODE(self):
         if self.mode.currentIndex()==0:
@@ -392,7 +392,7 @@ class WIDGETBNC(QWidget):
             self.bnc.write(mess)
             if self.parent.onehzIsRunning==False :
                 self.confBNC.setValue(self.channel+'/mode','SINGle')
-        self.bnc.query(":DISP:UPDATE")
+        #self.bnc.query(":DISP:UPDATE")
 
     def valueIni(self):
         self.name.setText(str(self.confBNC.value(self.channel+'/name')))
@@ -437,7 +437,7 @@ class WIDGETBNC(QWidget):
             self.state.setCurrentIndex(1)
         self.STATE()
         time.sleep(0.05)
-        self.bnc.query(":DISP:UPDATE")
+        #self.bnc.query(":DISP:UPDATE")
         
 
 
